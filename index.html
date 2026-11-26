@@ -45,7 +45,7 @@ button:hover{background:#334155}
 <script>
 // ---------- CONFIGURACIÓN ----------
 const EDIFICIO=[4,3,3];   // llaves por piso (piso 1 = planta baja). AJÚSTALO a tu maqueta
-const FIREBASE_URL="";    // vacío = simulación. Ej: "https://TU-PROYECTO-default-rtdb.firebaseio.com"
+const FIREBASE_URL="https://detector-corrientes-anomalas-default-rtdb.firebaseio.com";    // vacío = simulación. Ej: "https://TU-PROYECTO-default-rtdb.firebaseio.com"
 // En vivo, la base debe tener: /ultimo/p{piso}_{punto} = {mA:850, t:31.2, s:1, ts:<ms>}
 const ESTADOS=["BAJO","NORMAL","ALTO","ANÓMALA"];
 const RANGOS=[[40,190,24,30],[300,900,27,40],[1000,1450,40,55],[1500,2200,55,75]]; // mA mín/máx, °C mín/máx
