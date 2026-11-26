@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monitor de anomalías eléctricas</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--tx:#e2e8f0;--mut:#94a3b8;--s0:#3b82f6;--s1:#22c55e;--s2:#f59e0b;--s3:#ef4444;--sx:#475569}
+*{box-sizing:border-box}
+body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{padding:14px 18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid #334155}
+h1{font-size:18px;margin:0}h2{font-size:14px;margin:0 0 10px;color:var(--mut);font-weight:600}
+.mut{color:var(--mut);font-size:13px}
+.badge{padding:3px 12px;border-radius:99px;font-size:12px;font-weight:700;background:#334155}
+main{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;padding:16px;max-width:1100px;margin:auto}
+@media(max-width:800px){main{grid-template-columns:1fr}}
+.panel{background:var(--card);border-radius:12px;padding:14px;margin-bottom:16px}
+.piso{display:flex;gap:8px;margin-bottom:8px}
+.pl{width:62px;display:flex;align-items:center;justify-content:center;font-weight:700;background:var(--bg);border-radius:8px;color:var(--mut);font-size:13px}
+.llave{flex:1;min-width:0;border:2px solid transparent;border-left:6px solid var(--c);border-radius:8px;padding:8px;cursor:pointer;background:var(--bg)}
+.llave[data-s="0"]{--c:var(--s0)}.llave[data-s="1"]{--c:var(--s1)}.llave[data-s="2"]{--c:var(--s2)}.llave[data-s="3"]{--c:var(--s3);animation:p 1s infinite}.llave[data-s="x"]{--c:var(--sx)}
+.llave.sel{border-color:var(--tx);border-left-color:var(--c)}
+.llave b{font-size:12px;color:var(--mut)}.llave span{display:block;font-size:17px;font-weight:700}
+@keyframes p{50%{box-shadow:0 0 14px var(--s3)}}
+.big{font-size:36px;font-weight:800;margin:4px 0}
+.g{display:flex;gap:24px;font-size:15px;margin:8px 0}.g b{font-size:30px}
+.leg{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:12px}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+button{background:var(--bg);color:var(--tx);border:2px solid var(--c);border-radius:8px;padding:10px;font:inherit;cursor:pointer}
+button:hover{background:#334155}
+.al{padding:8px 10px;border-radius:8px;background:var(--bg);margin-bottom:6px;border-left:6px solid var(--c);font-size:14px}
+</style></head><body>
+<header><div><h1>Monitor de anomalías eléctricas</h1><div class="mut">Detector PIC16F887 · maqueta de edificio</div></div>
+<span class="badge" id="modo"></span></header>
+<main>
+<section><div class="panel"><h2>EDIFICIO</h2><div id="edificio"></div>
+<div class="leg"><span><i style="background:var(--s0)"></i>Bajo</span><span><i style="background:var(--s1)"></i>Normal</span><span><i style="background:var(--s2)"></i>Alto</span><span><i style="background:var(--s3)"></i>Anómala</span><span><i style="background:var(--sx)"></i>Sin datos</span></div></div></section>
+<section>
+<div class="panel"><h2>LLAVE SELECCIONADA</h2><div id="det"></div>
+<div class="btns" id="btns">
+<button style="--c:var(--s0)" onclick="fijar(0)">1 · Bajo</button><button style="--c:var(--s1)" onclick="fijar(1)">2 · Normal</button>
+<button style="--c:var(--s2)" onclick="fijar(2)">3 · Alto</button><button style="--c:var(--s3)" onclick="fijar(3)">4 · Anómala</button></div>
+<p class="mut" id="ayuda">Teclado: <b>1–4</b> cambia el estado · <b>flechas</b> eligen llave y piso · <b>Espacio</b> pausa la simulación.</p></div>
+<div class="panel"><h2>ALERTAS ACTIVAS</h2><div id="alertas"></div></div>
+</section></main>
+<script>
+// ---------- CONFIGURACIÓN ----------
+const EDIFICIO=[4,3,3];   // llaves por piso (piso 1 = planta baja). AJÚSTALO a tu maqueta
+const FIREBASE_URL="";    // vacío = simulación. Ej: "https://TU-PROYECTO-default-rtdb.firebaseio.com"
+// En vivo, la base debe tener: /ultimo/p{piso}_{punto} = {mA:850, t:31.2, s:1, ts:<ms>}
+const ESTADOS=["BAJO","NORMAL","ALTO","ANÓMALA"];
+const RANGOS=[[40,190,24,30],[300,900,27,40],[1000,1450,40,55],[1500,2200,55,75]]; // mA mín/máx, °C mín/máx
+// ---------- DATOS ----------
+const $=id=>document.getElementById(id), key=(p,k)=>`p${p}_${k}`;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const gen=s=>{const r=RANGOS[s];return{mA:Math.round(rnd(r[0],r[1])),t:+rnd(r[2],r[3]).toFixed(1),s,ts:Date.now()}};
+const vivo=!!FIREBASE_URL; let auto=true, sel={p:1,k:1}; const datos={};
+if(!vivo)EDIFICIO.forEach((n,i)=>{for(let k=1;k<=n;k++)datos[key(i+1,k)]=gen(1)});
+const est=d=>!d?"x":(d.ts&&Date.now()-d.ts>120000?"x":d.s); // sin lectura en 2 min = sin datos
+// ---------- PANTALLA ----------
+function pintar(){
+ let h="";
+ for(let p=EDIFICIO.length;p>=1;p--){h+=`<div class="piso"><div class="pl">Piso ${p}</div>`;
+  for(let k=1;k<=EDIFICIO[p-1];k++){const d=datos[key(p,k)];
+   h+=`<div class="llave${p==sel.p&&k==sel.k?" sel":""}" data-s="${est(d)}" onclick="elegir(${p},${k})"><b>Llave ${p}.${k}</b><span>${d?d.mA+" mA":"—"}</span><small class="mut">${d?d.t+" °C":"sin datos"}</small></div>`}
+  h+="</div>"}
+ $("edificio").innerHTML=h;
+ const d=datos[key(sel.p,sel.k)],s=est(d);
+ $("det").innerHTML=`<div class="mut">Llave ${sel.p}.${sel.k} · Piso ${sel.p}</div><div class="big" style="color:var(--s${s})">${s=="x"?"SIN DATOS":ESTADOS[s]}</div>`+(d?`<div class="g"><div><b>${d.mA}</b> mA</div><div><b>${d.t}</b> °C</div></div><div class="mut">Última lectura: ${new Date(d.ts).toLocaleTimeString()}</div>`:"");
+ const al=Object.entries(datos).filter(([k,d])=>est(d)>=2).sort((a,b)=>b[1].s-a[1].s);
+ $("alertas").innerHTML=al.length?al.map(([k,d])=>`<div class="al" style="--c:var(--s${d.s})"><b>Llave ${k.slice(1).replace("_",".")}</b> · ${ESTADOS[d.s]} · ${d.mA} mA · ${d.t} °C</div>`).join(""):'<div class="mut">Sin alertas activas</div>';
+}
+function elegir(p,k){sel={p,k};pintar()}
+function mover(dp,dk){let p=Math.min(EDIFICIO.length,Math.max(1,sel.p+dp));let k=sel.k+dk;
+ k=Math.min(EDIFICIO[p-1],Math.max(1,k));sel={p,k};pintar()}
+function fijar(s){if(vivo)return;datos[key(sel.p,sel.k)]=gen(s);pintar()}
+addEventListener("keydown",e=>{
+ const m={ArrowLeft:[0,-1],ArrowRight:[0,1],ArrowUp:[1,0],ArrowDown:[-1,0]}[e.key];
+ if(m){e.preventDefault();mover(...m);return}
+ if(e.key==" "){e.preventDefault();auto=!auto;$("modo").textContent=auto?"SIMULACIÓN":"SIMULACIÓN · PAUSA";return}
+ if(e.key>="1"&&e.key<="4")fijar(+e.key-1)});
+// ---------- ARRANQUE ----------
+if(vivo){
+ $("modo").textContent="EN VIVO";$("modo").style.background="var(--s1)";$("btns").hidden=true;
+ $("ayuda").innerHTML="Mostrando las lecturas que envía el PIC. <b>Flechas</b> eligen llave y piso.";
+ const es=new EventSource(FIREBASE_URL+"/ultimo.json"); // Firebase Realtime Database (REST streaming)
+ const rec=ev=>{const{path,data}=JSON.parse(ev.data),sg=path.split("/").filter(Boolean);
+  if(!sg.length)Object.assign(datos,data||{});else if(sg.length==1)datos[sg[0]]=data;else(datos[sg[0]]=datos[sg[0]]||{})[sg[1]]=data;pintar()};
+ es.addEventListener("put",rec);es.addEventListener("patch",rec);
+ setInterval(pintar,5000);
+}else{
+ $("modo").textContent="SIMULACIÓN";
+ setInterval(()=>{if(auto){for(const k in datos)datos[k]=gen(datos[k].s);pintar()}},1000);
+}
+pintar();
+</script></body></html>
