@@ -5,6 +5,7 @@
 <style>
 :root{--bg:#0f172a;--card:#1e293b;--tx:#e2e8f0;--mut:#94a3b8;--s0:#3b82f6;--s1:#22c55e;--s2:#f59e0b;--s3:#ef4444;--sx:#475569}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
 header{padding:14px 18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid #334155}
 h1{font-size:18px;margin:0}h2{font-size:14px;margin:0 0 10px;color:var(--mut);font-weight:600}
@@ -39,7 +40,7 @@ button:hover{background:#334155}
 <div class="btns" id="btns">
 <button style="--c:var(--s0)" onclick="fijar(0)">1 · Bajo</button><button style="--c:var(--s1)" onclick="fijar(1)">2 · Normal</button>
 <button style="--c:var(--s2)" onclick="fijar(2)">3 · Alto</button><button style="--c:var(--s3)" onclick="fijar(3)">4 · Anómala</button></div>
-<p class="mut" id="ayuda">Teclado: <b>1–4</b> cambia el estado · <b>flechas</b> eligen llave y piso · <b>Espacio</b> pausa la simulación.</p></div>
+<p class="mut" id="ayuda" hidden>Teclado: <b>1–4</b> cambia el estado · <b>flechas</b> eligen llave y piso · <b>Espacio</b> pausa la simulación.</p></div>
 <div class="panel"><h2>ALERTAS ACTIVAS</h2><div id="alertas"></div></div>
 </section></main>
 <script>
@@ -48,13 +49,15 @@ const EDIFICIO=[4,3,3];   // llaves por piso (piso 1 = planta baja). AJÚSTALO a
 const FIREBASE_URL="";    // vacío = simulación. Ej: "https://TU-PROYECTO-default-rtdb.firebaseio.com"
 // En vivo, la base debe tener: /ultimo/p{piso}_{punto} = {mA:850, t:31.2, s:1, ts:<ms>}
 const ESTADOS=["BAJO","NORMAL","ALTO","ANÓMALA"];
-const RANGOS=[[40,190,24,30],[300,900,27,40],[1000,1450,40,55],[1500,2200,55,75]]; // mA mín/máx, °C mín/máx
+const RANGOS=[[40,190,15,20],[300,900,20,25],[1000,1450,25,35],[1500,2200,35,45]]; // mA mín/máx, °C mín/máx por estado
+const MOSTRAR_BOTONES=true; // false = oculta los botones (las teclas 1–4 siguen funcionando)
 // ---------- DATOS ----------
 const $=id=>document.getElementById(id), key=(p,k)=>`p${p}_${k}`;
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const gen=s=>{const r=RANGOS[s];return{mA:Math.round(rnd(r[0],r[1])),t:+rnd(r[2],r[3]).toFixed(1),s,ts:Date.now()}};
 const vivo=!!FIREBASE_URL; let auto=true, sel={p:1,k:1}; const datos={};
 if(!vivo)EDIFICIO.forEach((n,i)=>{for(let k=1;k<=n;k++)datos[key(i+1,k)]=gen(1)});
+const jit=d=>{const r=RANGOS[d.s],c=(v,a,b)=>Math.min(b,Math.max(a,v));return{mA:Math.round(c(d.mA+rnd(-25,25),r[0],r[1])),t:+c(d.t+rnd(-.3,.3),r[2],r[3]).toFixed(1),s:d.s,ts:Date.now()}};
 const est=d=>!d?"x":(d.ts&&Date.now()-d.ts>120000?"x":d.s); // sin lectura en 2 min = sin datos
 // ---------- PANTALLA ----------
 function pintar(){
@@ -76,7 +79,7 @@ function fijar(s){if(vivo)return;datos[key(sel.p,sel.k)]=gen(s);pintar()}
 addEventListener("keydown",e=>{
  const m={ArrowLeft:[0,-1],ArrowRight:[0,1],ArrowUp:[1,0],ArrowDown:[-1,0]}[e.key];
  if(m){e.preventDefault();mover(...m);return}
- if(e.key==" "){e.preventDefault();auto=!auto;$("modo").textContent=auto?"SIMULACIÓN":"SIMULACIÓN · PAUSA";return}
+ if(e.key==" "){e.preventDefault();auto=!auto;return}
  if(e.key>="1"&&e.key<="4")fijar(+e.key-1)});
 // ---------- ARRANQUE ----------
 if(vivo){
@@ -88,8 +91,8 @@ if(vivo){
  es.addEventListener("put",rec);es.addEventListener("patch",rec);
  setInterval(pintar,5000);
 }else{
- $("modo").textContent="SIMULACIÓN";
- setInterval(()=>{if(auto){for(const k in datos)datos[k]=gen(datos[k].s);pintar()}},1000);
+ $("modo").hidden=true;$("btns").hidden=!MOSTRAR_BOTONES;
+ setInterval(()=>{if(auto){for(const k in datos)datos[k]=jit(datos[k]);pintar()}},1000);
 }
 pintar();
 </script></body></html>
